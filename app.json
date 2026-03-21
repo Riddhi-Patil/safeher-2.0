@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "SafeHer",
+    "slug": "safeher",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "extra": {
+      "API_URL": "https://safeher-vrkv.onrender.com",
+      "eas": {
+        "projectId": "d08bc8aa-3a5b-4b95-b6c6-7e181ee942e4"
+      }
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.anonymous.safeher",
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {}
+  }
+}
