@@ -42,25 +42,38 @@ export default function LoginScreen({ navigation }) {
         // Navigate immediately
         navigation.navigate('Main');
 
-        // Setup push token in the background
         (async () => {
+          console.log("[Login] Starting push token registration...");
           const token = await registerForPushNotificationsAsync();
           if (token) {
-            console.log("Push token obtained after login:", token);
+            console.log("[Login] Push token obtained:", token);
             const authToken = await getToken();
+            const currentUserId = result.user?.id || result.user?._id;
             try {
+              console.log(`[Login] Saving push token for user ${currentUserId}...`);
               const res = await fetch(`${BASE_URL}/users/savePushToken`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                   ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
                 },
-                body: JSON.stringify({ userId: result.user?.id, token }),
+                body: JSON.stringify({ 
+                  userId: currentUserId, 
+                  pushToken: token,
+                  token: token 
+                }),
               });
-              if (!res.ok) console.error("savePushToken API error status:", res.status);
+              if (!res.ok) {
+                console.error("[Login] savePushToken API error status:", res.status);
+              } else {
+                const data = await res.json();
+                console.log("[Login] Save push token success:", data);
+              }
             } catch (err) {
-              console.error("Failed to save push token after login:", err.message);
+              console.error("[Login] Failed to save push token after login:", err.message);
             }
+          } else {
+            console.warn("[Login] No push token obtained.");
           }
         })();
       } else {

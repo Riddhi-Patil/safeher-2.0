@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "SafeHer",
-    "slug": "safeher",
+    "slug": "safeher-new",
+    "owner": "riddhi.patil59",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -11,7 +12,7 @@
     "extra": {
       "API_URL": "https://safeher-vrkv.onrender.com",
       "eas": {
-        "projectId": "d08bc8aa-3a5b-4b95-b6c6-7e181ee942e4"
+        "projectId": "23cb3c58-de9e-48c8-a588-4a88a3e2e572"
       }
     },
     "ios": {

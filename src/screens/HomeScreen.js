@@ -13,6 +13,7 @@ import {
     Modal,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
@@ -97,13 +98,33 @@ const HomeScreen = ({ navigation }) => {
         if (user?.name && isMounted.current) setUserName(user.name);
         const authToken = await getToken();
         
-        if (!user || !user.id) return;
+        if (!user) return;
+        
+        // Robust ID extraction: handle string ID, object ID, and different keys
+        const extractId = (u) => {
+          if (!u) return null;
+          if (typeof u === 'string') return u;
+          if (u.id && typeof u.id === 'string') return u.id;
+          if (u._id) {
+            if (typeof u._id === 'string') return u._id;
+            if (u._id.$oid) return u._id.$oid; // Handle MongoDB export format
+            return u._id.toString();
+          }
+          return null;
+        };
+
+        const currentUserId = extractId(user);
+        if (!currentUserId) {
+          console.warn("[HomeScreen] Could not extract a valid User ID from:", user);
+          return;
+        }
 
         // 1. Location
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({});
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
           const { latitude, longitude } = pos.coords;
+          console.log(`[HomeScreen] Current User Location: Lat ${latitude}, Lon ${longitude}`);
           
           try {
             const places = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -113,26 +134,56 @@ const HomeScreen = ({ navigation }) => {
             }
           } catch (e) {}
 
+          console.log(`[HomeScreen] Updating location on backend for user ${currentUserId}...`);
           await fetch(`${BASE_URL}/users/updateLocation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
-            body: JSON.stringify({ userId: user.id, latitude, longitude }),
-          }).catch(() => {});
+            body: JSON.stringify({ userId: currentUserId, latitude, longitude }),
+          })
+          .then(res => res.json())
+          .then(data => console.log("[HomeScreen] Update location success:", data))
+          .catch(e => console.error("[HomeScreen] Update location failed:", e));
         }
 
         // 2. Notifications
         try {
-          const token = await registerForPushNotificationsAsync();
-          if (token) {
-            console.log("Push token obtained in HomeScreen:", token);
-            await fetch(`${BASE_URL}/users/savePushToken`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
-              body: JSON.stringify({ userId: user.id, token }),
-            });
+          const registrationDone = await AsyncStorage.getItem('pushRegistrationDone');
+          if (registrationDone === 'true') {
+            console.log("[HomeScreen] Push registration already completed for this session.");
+          } else {
+            console.log("[HomeScreen] Registering for push notifications...");
+            const token = await registerForPushNotificationsAsync();
+            if (token) {
+              // Get current community alert setting
+              const communityEnabled = (await AsyncStorage.getItem('communityAlertsEnabled')) === 'true';
+              
+              console.log("[HomeScreen] Push token found:", token);
+              console.log(`[HomeScreen] Saving push token (Community: ${communityEnabled}) for user ${currentUserId}...`);
+              
+              const res = await fetch(`${BASE_URL}/users/savePushToken`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+                body: JSON.stringify({ 
+                  userId: currentUserId, 
+                  pushToken: token, 
+                  token: token,
+                  communitySOS: communityEnabled
+                }),
+              });
+              
+              const data = await res.json();
+              if (data.success) {
+                console.log("[HomeScreen] Save push token success:", data);
+                await AsyncStorage.setItem('pushRegistrationDone', 'true');
+              } else {
+                console.error("[HomeScreen] Save push token failed:", data.error);
+              }
+            } else {
+              console.warn("[HomeScreen] No push token obtained.");
+            }
           }
         } catch (tokenErr) {
-          console.error("Error getting/saving push token:", tokenErr);
+          console.error("[HomeScreen] Error getting/saving push token:", tokenErr);
         }
       } catch (err) {
         console.error("Critical error in location/notification setup:", err);
@@ -184,32 +235,40 @@ const HomeScreen = ({ navigation }) => {
     await saveFakeCallSettings();
     navigation.navigate('IncomingCall', {
       callerName: fakeCallerName,
-      callerNumber: fakeCallerNumber,
+      callerNumber: fakeCallerNumber || '1-800-SAFE-HER'
     });
   };
 
-  const dismissIncomingCall = async () => {
-    setIncomingCallVisible(false);
-    await stopRingtone();
-    if (autoSOSTimerRef.current) {
-      clearTimeout(autoSOSTimerRef.current);
-      autoSOSTimerRef.current = null;
+  const [pushToken, setPushToken] = useState('');
+  const [communityEnabled, setCommunityEnabled] = useState(false);
+  const [dbUserId, setDbUserId] = useState('Loading...');
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const enabled = await AsyncStorage.getItem('communityAlertsEnabled');
+        setCommunityEnabled(enabled === 'true');
+        const token = await AsyncStorage.getItem('pushToken');
+        setPushToken(token || 'Not registered');
+        
+        const user = await getCurrentUser();
+        if (user) {
+          const id = user.id || user._id;
+          setDbUserId(id ? id.toString() : 'No ID');
+        } else {
+          setDbUserId('Login Required');
+        }
+      } catch (e) {
+        setDbUserId('Error');
+      }
+    };
+    loadSettings();
+    
+    // Refresh when screen is focused
+    if (isFocused) {
+      loadSettings();
     }
-  };
-
-  const answerIncomingCall = async () => {
-    await dismissIncomingCall();
-  };
-
-  const playAlarm = async () => {
-    setAlarmActive(true);
-    await playRingtone();
-  };
-
-  const stopAlarm = async () => {
-    setAlarmActive(false);
-    await stopRingtone();
-  };
+  }, [isFocused]);
 
   const shareLocationSMS = async () => {
     try {
@@ -288,7 +347,7 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.greeting}>Hi, {userName || 'User'} <Text style={styles.emoji}>👋</Text></Text>
             <Text style={styles.subGreeting}>Stay safe today</Text>
           </View>
-          <TouchableOpacity style={styles.settingsButton}>
+          <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate('Settings')}>
             <Feather name="settings" size={22} color="#666" />
           </TouchableOpacity>
         </View>
@@ -313,7 +372,7 @@ const HomeScreen = ({ navigation }) => {
           <Text style={styles.sosTitle}>Emergency SOS</Text>
           <Text style={styles.sosDescription}>Press and hold for {countdown} seconds to activate SOS</Text>
         </View>
-        
+
         {/* Trusted Contacts Card */}
         <View style={styles.infoCard}>
           <View style={styles.infoIconContainer}>

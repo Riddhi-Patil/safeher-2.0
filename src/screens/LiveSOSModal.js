@@ -81,6 +81,20 @@ const LiveSOSModal = ({ navigation }) => {
           // 2. Alert Nearby Users & Save History
           const user = await getCurrentUser();
           const authToken = await getToken();
+
+          const extractId = (u) => {
+            if (!u) return null;
+            if (typeof u === 'string') return u;
+            if (u.id && typeof u.id === 'string') return u.id;
+            if (u._id) {
+              if (typeof u._id === 'string') return u._id;
+              if (u._id.$oid) return u._id.$oid;
+              return u._id.toString();
+            }
+            return null;
+          };
+
+          const userId = extractId(user);
           
           // Save a history event
           const evt = { id: Date.now(), timestamp: Date.now(), location: newLoc };
@@ -92,37 +106,71 @@ const LiveSOSModal = ({ navigation }) => {
           } catch (e) {}
 
           // Call community SOS API
-          if (user?.id) {
-            console.log(`[LiveSOS] Calling community SOS API...`);
+          if (userId) {
+            console.log(`[LiveSOS] Calling community SOS API for user ${userId}...`);
+            console.log(`[LiveSOS] Payload:`, { latitude: lat, longitude: lon, userId: userId });
             await fetch(`${BASE_URL}/sos/community`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
               },
-              body: JSON.stringify({ latitude: lat, longitude: lon, userId: user.id }),
-            }).catch(e => console.error("[LiveSOS] API error", e));
+              body: JSON.stringify({ latitude: lat, longitude: lon, userId: userId }),
+            })
+            .then(res => res.json())
+            .then(data => {
+              console.log("[LiveSOS] Community SOS API response:", data);
+              const count = data.nearbyCount || data.sentTo || 0;
+              console.log(`[LiveSOS] Nearby users notified: ${count}`);
+              
+              if (count > 0) {
+                Alert.alert("SOS Sent", `Your alert has been sent to ${count} nearby users.`);
+              } else {
+                Alert.alert("SOS Sent", "Alert sent, but no nearby users with active tokens were found.");
+              }
+            })
+            .catch(e => console.error("[LiveSOS] Community SOS API error", e));
           }
 
-          // 3. Start interval to update location on server every 30 seconds
+          // 3. Start interval to update location on server every 15 seconds (more frequent during SOS)
           intervalId = setInterval(async () => {
             try {
-              const currentPos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+              const currentPos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
               const cLat = currentPos.coords.latitude;
               const cLon = currentPos.coords.longitude;
               
-              if (user?.id) {
+              const extractId = (u) => {
+                if (!u) return null;
+                if (typeof u === 'string') return u;
+                if (u.id && typeof u.id === 'string') return u.id;
+                if (u._id) {
+                  if (typeof u._id === 'string') return u._id;
+                  if (u._id.$oid) return u._id.$oid;
+                  return u._id.toString();
+                }
+                return null;
+              };
+
+              const userId = extractId(user);
+              
+              if (userId) {
+                console.log(`[LiveSOS] Updating location during SOS: Lat ${cLat}, Lon ${cLon}`);
                 await fetch(`${BASE_URL}/users/updateLocation`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
                   },
-                  body: JSON.stringify({ userId: user.id, latitude: cLat, longitude: cLon }),
-                }).catch(() => {});
+                  body: JSON.stringify({ userId: userId, latitude: cLat, longitude: cLon }),
+                })
+                .then(res => res.json())
+                .then(data => console.log("[LiveSOS] Location update success:", data))
+                .catch(e => console.error("[LiveSOS] Location update failed:", e));
               }
-            } catch (e) {}
-          }, 30000);
+            } catch (e) {
+              console.error("[LiveSOS] Interval location update error:", e);
+            }
+          }, 15000);
         }
       } catch (err) {
         console.error('[LiveSOS] Activation error', err);

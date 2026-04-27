@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { logout } from '../utils/auth';
+import { BASE_URL, getCurrentUser, getToken, logout } from '../utils/auth';
 import { commonStyles, theme } from '../utils/theme';
 
 const SettingsScreen = ({ navigation }) => {
@@ -20,7 +20,30 @@ const SettingsScreen = ({ navigation }) => {
     setCommunityEnabled(next);
     try {
       await AsyncStorage.setItem('communityAlertsEnabled', next ? 'true' : 'false');
-    } catch {}
+      
+      // Sync with backend
+      const user = await getCurrentUser();
+      const authToken = await getToken();
+      const userId = user?.id || user?._id;
+      
+      if (userId) {
+        console.log(`[Settings] Syncing community alerts (${next}) for user ${userId}`);
+        await fetch(`${BASE_URL}/users/savePushToken`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) 
+          },
+          body: JSON.stringify({ 
+            userId: userId, 
+            communitySOS: next, // Tell backend if we want alerts
+            pushToken: await AsyncStorage.getItem('pushToken') // Send token again to be safe
+          }),
+        });
+      }
+    } catch (err) {
+      console.error("[Settings] Failed to sync community toggle", err);
+    }
   };
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>

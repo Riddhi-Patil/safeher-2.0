@@ -99,17 +99,55 @@ function MainTabs() {
 
 export default function App() {
   const navigationRef = ReactNative.useRef(null);
+  
   ReactNative.useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    // Listener for when a notification is received while the app is in foreground
+    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
+      const { title, body, data } = notification.request.content;
+      console.log("[App] Notification received in foreground:", { title, body, data });
+      
+      // LOG EVERYTHING for debugging
+      console.log("[DEBUG] FULL NOTIFICATION OBJECT:", JSON.stringify(notification, null, 2));
+
+      // If it has latitude and longitude, it's an SOS alert
+      if (data?.latitude && data?.longitude) {
+        ReactNative.Alert.alert(
+          title || "SOS Alert!",
+          body || "Someone nearby is in danger!",
+          [
+            { 
+              text: "View on Map", 
+              onPress: () => {
+                navigationRef.current?.navigate('Map', { 
+                  latitude: parseFloat(data.latitude), 
+                  longitude: parseFloat(data.longitude) 
+                });
+              }
+            },
+            { text: "Dismiss", style: "cancel" }
+          ]
+        );
+      }
+    });
+
+    // Listener for when a user interacts with a notification (taps it)
+    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response?.notification?.request?.content?.data || {};
+      console.log("[App] Notification response received:", data);
+      
       const latitude = data?.latitude;
       const longitude = data?.longitude;
       if (latitude && longitude) {
-        navigationRef.current?.navigate('Map', { latitude, longitude });
+        navigationRef.current?.navigate('Map', { 
+          latitude: parseFloat(latitude), 
+          longitude: parseFloat(longitude) 
+        });
       }
     });
+
     return () => {
-      sub.remove();
+      notificationListener.remove();
+      responseListener.remove();
     };
   }, []);
   return (

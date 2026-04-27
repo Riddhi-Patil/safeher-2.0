@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Alert, Linking } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme, commonStyles } from '../utils/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,7 +12,6 @@ const ContactsScreen = () => {
   const [contacts, setContacts] = useState([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [testSOSModalVisible, setTestSOSModalVisible] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [relationInput, setRelationInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
@@ -97,20 +96,6 @@ const ContactsScreen = () => {
     );
   };
 
-  const testSOS = (contact) => {
-    setCurrentContact(contact);
-    setTestSOSModalVisible(true);
-  };
-
-  const sendTestSOS = async () => {
-    if (!currentContact) return;
-    const message = 'TEST SOS ALERT from SafeHer App: This is a test message.';
-    try { await Linking.openURL(`sms:${currentContact.phone}?body=${encodeURIComponent(message)}`); } catch {}
-    Alert.alert('Test SOS Sent', `A test SOS message was sent to ${currentContact.name}.`);
-    setTestSOSModalVisible(false);
-    setCurrentContact(null);
-  };
-
   const renderContactItem = ({ item }) => {
     const initial = (item?.name || '?').charAt(0).toUpperCase();
     return (
@@ -124,9 +109,6 @@ const ContactsScreen = () => {
             {!!item.relation && (
               <View style={styles.chip}><Text style={styles.chipText}>{item.relation}</Text></View>
             )}
-            <TouchableOpacity style={styles.testSOSChip} onPress={() => testSOS(item)}>
-              <Text style={styles.testSOSText}>Test SOS</Text>
-            </TouchableOpacity>
           </View>
           <View style={styles.bitsRow}>
             {!!item.phone && (
@@ -194,18 +176,6 @@ const ContactsScreen = () => {
           </View>
         </View>
       </Modal>
-
-      {/* Test SOS Modal */}
-      <Modal visible={testSOSModalVisible} transparent animationType="fade" onRequestClose={() => setTestSOSModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Test SOS Alert</Text>
-            <Text style={styles.modalText}>This will send a test SOS message to {currentContact?.name}. This is only a test and will not trigger a real emergency response.</Text>
-            <TouchableOpacity style={styles.sosTestBtn} onPress={sendTestSOS}><Text style={styles.saveBtnText}>Send Test SOS</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setTestSOSModalVisible(false); setCurrentContact(null); }}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -221,8 +191,6 @@ const styles = StyleSheet.create({
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
   chip: { backgroundColor: '#f3f4f6', borderRadius: 16, paddingVertical: 6, paddingHorizontal: 10, marginRight: 8 },
   chipText: { color: '#666', fontSize: 12, fontWeight: '600' },
-  testSOSChip: { borderWidth: 1.5, borderColor: theme.colors.accent, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 12 },
-  testSOSText: { color: theme.colors.accent, fontSize: 12, fontWeight: '700' },
   bitsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   bit: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eef2f7', borderRadius: 16, paddingVertical: 6, paddingHorizontal: 10, marginRight: 8 },
   bitText: { marginLeft: 6, color: '#667085', fontSize: 12, fontWeight: '600' },
@@ -239,7 +207,6 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontWeight: '700' },
   cancelBtn: { marginTop: 10, alignItems: 'center' },
   cancelText: { color: '#666', fontWeight: '600' },
-  sosTestBtn: { ...commonStyles.button },
 });
 
 export default ContactsScreen;

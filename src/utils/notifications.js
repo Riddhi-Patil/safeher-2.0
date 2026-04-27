@@ -23,20 +23,24 @@ export async function registerForPushNotificationsAsync() {
 
     // Expo projectId is required for Expo SDK 49+
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    console.log("[Notifications] Using projectId:", projectId);
     if (!projectId) {
-      console.warn('No EAS projectId found in app.json. Push notifications may not work.');
+      console.warn('[Notifications] No EAS projectId found. If you are using Expo SDK 49+, this is required for getExpoPushTokenAsync.');
     }
 
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log("Push Token obtained:", token);
+    console.log("[Notifications] Push Token found:", token);
     
     if (Platform.OS === 'android') {
-      Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
+      await Notifications.setNotificationChannelAsync('sos-alerts', {
+        name: 'SOS Alerts',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
+        lightColor: '#FF0000',
+        sound: 'default',
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
+      console.log("[Notifications] Android notification channel 'sos-alerts' configured.");
     }
 
     return token;
